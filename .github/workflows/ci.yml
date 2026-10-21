@@ -1,0 +1,42 @@
+name: CI/CD DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ master, main, "feature/*" ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  security-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Obtener el código fuente
+      - name: Copiar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Capa 3 - Análisis de Secretos en el Pipeline
+      - name: Escaneo de secretos con Gitleaks
+        uses: gitleaks/gitleaks-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. Análisis Estático de Código (SAST)
+      - name: Análisis estático de código con Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: auto
+
+      # 4. Construcción del contenedor Docker
+      - name: Construir imagen Docker
+        run: docker build -t minicodevelopers-app:${{ github.sha }} .
+
+      # 5. Escaneo de vulnerabilidades en la imagen Docker
+      - name: Escaneo de vulnerabilidades con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'minicodevelopers-app:${{ github.sha }}'
+          format: 'table'
+          exit-code: '0' # Usa '1' si quieres que el pipeline falle cuando encuentre vulnerabilidades críticas
+          severity: 'CRITICAL,HIGH'
